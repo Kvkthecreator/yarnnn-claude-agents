@@ -18,7 +18,7 @@ This document describes what the Yarnnn core service needs to implement to integ
             ↓ HTTP POST
 ┌─────────────────────────────────────┐
 │  Agent Deployment Service (This)    │
-│  URL: https://your-service.onrender.com
+│  URL: https://yarnnn-claude-agents.onrender.com
 │  - Receives trigger requests        │
 │  - Creates agent instances          │
 │  - Executes agent tasks             │
@@ -41,7 +41,7 @@ This service (after deployed to Render) exposes these endpoints:
 ### 1. Health Check
 
 ```http
-GET https://your-service.onrender.com/health
+GET https://yarnnn-claude-agents.onrender.com/health
 
 Response:
 {
@@ -57,14 +57,16 @@ Response:
 ### 2. Research Agent - Run Task
 
 ```http
-POST https://your-service.onrender.com/agents/research/run
+POST https://yarnnn-claude-agents.onrender.com/agents/research/run
 Content-Type: application/json
 
 Request Body:
 {
-  "task_type": "monitor",     // or "deep_dive"
-  "topic": "AI agents",       // required for deep_dive, optional for monitor
-  "parameters": {             // optional additional parameters
+  "task_type": "monitor",         // or "deep_dive"
+  "workspace_id": "ws_abc123",    // REQUIRED: User's workspace ID
+  "basket_id": "basket_xyz789",   // REQUIRED: Basket to store results
+  "topic": "AI agents",           // required for deep_dive only
+  "parameters": {                 // optional additional parameters
     "custom_param": "value"
   }
 }
@@ -97,14 +99,14 @@ Response (Error):
 ### 3. Research Agent - Status
 
 ```http
-GET https://your-service.onrender.com/agents/research/status
+GET https://yarnnn-claude-agents.onrender.com/agents/research/status
 
 Response:
 {
-  "status": "ready",              // or "error"
-  "agent_id": "yarnnn_research_agent",
+  "status": "ready",
   "agent_type": "research",
-  "message": "Research agent is configured and ready"
+  "message": "Research agent endpoint is ready. Pass workspace_id and basket_id in requests.",
+  "required_request_params": ["task_type", "workspace_id", "basket_id"]
 }
 ```
 
@@ -115,7 +117,7 @@ Response:
 ### 4. Content Agent (Placeholder)
 
 ```http
-POST https://your-service.onrender.com/agents/content/run
+POST https://yarnnn-claude-agents.onrender.com/agents/content/run
 
 Response:
 {
@@ -128,7 +130,7 @@ Status: 501
 ### 5. Reporting Agent (Placeholder)
 
 ```http
-POST https://your-service.onrender.com/agents/reporting/run
+POST https://yarnnn-claude-agents.onrender.com/agents/reporting/run
 
 Response:
 {
@@ -161,21 +163,36 @@ class AgentDeploymentClient:
         self.base_url = base_url
         self.client = httpx.AsyncClient(timeout=300.0)  # 5 min timeout
 
-    async def trigger_research_monitor(self) -> Dict[str, Any]:
+    async def trigger_research_monitor(
+        self,
+        workspace_id: str,
+        basket_id: str
+    ) -> Dict[str, Any]:
         """Trigger research monitoring task."""
         response = await self.client.post(
             f"{self.base_url}/agents/research/run",
-            json={"task_type": "monitor"}
+            json={
+                "task_type": "monitor",
+                "workspace_id": workspace_id,
+                "basket_id": basket_id
+            }
         )
         response.raise_for_status()
         return response.json()
 
-    async def trigger_research_deep_dive(self, topic: str) -> Dict[str, Any]:
+    async def trigger_research_deep_dive(
+        self,
+        workspace_id: str,
+        basket_id: str,
+        topic: str
+    ) -> Dict[str, Any]:
         """Trigger deep dive research on topic."""
         response = await self.client.post(
             f"{self.base_url}/agents/research/run",
             json={
                 "task_type": "deep_dive",
+                "workspace_id": workspace_id,
+                "basket_id": basket_id,
                 "topic": topic
             }
         )
@@ -253,16 +270,25 @@ agent_client = AgentDeploymentClient(
 )
 
 @router.post("/api/agents/research/trigger-monitor")
-async def trigger_research_monitor(background_tasks: BackgroundTasks):
+async def trigger_research_monitor(
+    basket_id: str,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user)
+):
     """Trigger research monitoring (called from UI)."""
 
     # Option 1: Synchronous (blocks until complete)
-    # result = await agent_client.trigger_research_monitor()
+    # result = await agent_client.trigger_research_monitor(
+    #     workspace_id=current_user.workspace_id,
+    #     basket_id=basket_id
+    # )
     # return result
 
     # Option 2: Background task (returns immediately)
     background_tasks.add_task(
         run_research_monitor_background,
+        workspace_id=current_user.workspace_id,
+        basket_id=basket_id,
         user_id=current_user.id
     )
     return {
@@ -271,17 +297,29 @@ async def trigger_research_monitor(background_tasks: BackgroundTasks):
     }
 
 @router.post("/api/agents/research/deep-dive")
-async def trigger_deep_dive(request: DeepDiveRequest):
+async def trigger_deep_dive(
+    request: DeepDiveRequest,
+    current_user: User = Depends(get_current_user)
+):
     """Trigger deep dive research on topic."""
     result = await agent_client.trigger_research_deep_dive(
+        workspace_id=current_user.workspace_id,
+        basket_id=request.basket_id,
         topic=request.topic
     )
     return result
 
-async def run_research_monitor_background(user_id: str):
+async def run_research_monitor_background(
+    workspace_id: str,
+    basket_id: str,
+    user_id: str
+):
     """Background task to run research and store results."""
     try:
-        result = await agent_client.trigger_research_monitor()
+        result = await agent_client.trigger_research_monitor(
+            workspace_id=workspace_id,
+            basket_id=basket_id
+        )
 
         # Store results in user's research basket
         # (Agents already store via YarnnnMemory, but you might
@@ -307,11 +345,11 @@ Add to Yarnnn service environment:
 ```bash
 # .env (Yarnnn core service)
 
-# Agent Deployment Service URL
-AGENT_DEPLOYMENT_URL=https://your-service.onrender.com
+# Agent Deployment Service URL (Production)
+AGENT_DEPLOYMENT_URL=https://yarnnn-claude-agents.onrender.com
 
 # Or for local testing
-AGENT_DEPLOYMENT_URL=http://localhost:8000
+# AGENT_DEPLOYMENT_URL=http://localhost:8000
 ```
 
 #### 5. Database Schema (Optional)
@@ -637,7 +675,7 @@ async def trigger_agent_with_retry(task_type: str, max_retries: int = 3):
 - Yarnnn Service: `http://localhost:3000` (or your port)
 
 **Production:**
-- Agent Service: `https://yarnnn-agents.onrender.com` (after deploy)
+- Agent Service: `https://yarnnn-claude-agents.onrender.com` ✅ LIVE
 - Yarnnn Service: `https://api.yarnnn.com` (your production)
 
 ### Key Environment Variables
@@ -647,33 +685,41 @@ async def trigger_agent_with_retry(task_type: str, max_retries: int = 3):
 ANTHROPIC_API_KEY=sk-ant-...
 YARNNN_API_URL=https://api.yarnnn.com
 YARNNN_API_KEY=ynk_...
-YARNNN_WORKSPACE_ID=ws_...
-RESEARCH_BASKET_ID=basket_research_prod
 ```
+Note: workspace_id and basket_id are NOT env vars - passed per request
 
 **Yarnnn Service:**
 ```
-AGENT_DEPLOYMENT_URL=https://yarnnn-agents.onrender.com
+AGENT_DEPLOYMENT_URL=https://yarnnn-claude-agents.onrender.com
 ```
 
 ### Testing Commands
 
 ```bash
 # Health check
-curl https://yarnnn-agents.onrender.com/health
+curl https://yarnnn-claude-agents.onrender.com/health
 
 # Check agent status
-curl https://yarnnn-agents.onrender.com/agents/research/status
+curl https://yarnnn-claude-agents.onrender.com/agents/research/status
 
 # Trigger monitoring
-curl -X POST https://yarnnn-agents.onrender.com/agents/research/run \
+curl -X POST https://yarnnn-claude-agents.onrender.com/agents/research/run \
   -H "Content-Type: application/json" \
-  -d '{"task_type": "monitor"}'
+  -d '{
+    "task_type": "monitor",
+    "workspace_id": "ws_your_workspace",
+    "basket_id": "basket_your_basket"
+  }'
 
 # Trigger deep dive
-curl -X POST https://yarnnn-agents.onrender.com/agents/research/run \
+curl -X POST https://yarnnn-claude-agents.onrender.com/agents/research/run \
   -H "Content-Type: application/json" \
-  -d '{"task_type": "deep_dive", "topic": "AI agent trends"}'
+  -d '{
+    "task_type": "deep_dive",
+    "workspace_id": "ws_your_workspace",
+    "basket_id": "basket_your_basket",
+    "topic": "AI agent trends"
+  }'
 ```
 
 ---
