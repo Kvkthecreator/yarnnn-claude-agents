@@ -3,33 +3,35 @@ requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "claude-agent-sdk"
-version = "0.1.0"
-description = "Generic framework for building autonomous AI agents with pluggable integrations (memory, governance, tasks). Includes YARNNN integration for governed long-term memory."
+name = "yarnnn-agent-deployment"
+version = "1.0.0"
+description = "Production deployment service for Yarnnn autonomous agents"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "YARNNN Contributors"}
+    {name = "Yarnnn Team"}
 ]
-keywords = ["ai", "agents", "claude", "autonomous", "memory", "governance", "yarnnn", "pluggable", "integrations", "framework"]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-    "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
-]
+keywords = ["yarnnn", "agents", "deployment", "production"]
 
 dependencies = [
-    "anthropic>=0.18.0",
-    "httpx>=0.25.0",
+    # Core library dependency (from open source)
+    "claude-agent-sdk @ git+https://github.com/Kvkthecreator/claude-agentsdk-opensource.git@v0.1.0",
+
+    # Web service
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
     "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+
+    # Configuration
     "python-dotenv>=1.0.0",
+    "pyyaml>=6.0",
+
+    # HTTP client
+    "httpx>=0.25.0",
+
+    # Async support
     "aiohttp>=3.9.0",
 ]
 
@@ -37,32 +39,29 @@ dependencies = [
 dev = [
     "pytest>=7.4.0",
     "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.1.0",
+    "httpx>=0.25.0",  # For testing API
     "black>=23.0.0",
     "ruff>=0.1.0",
-    "mypy>=1.7.0",
 ]
-docs = [
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.4.0",
+
+monitoring = [
+    "prometheus-client>=0.19.0",
+    "sentry-sdk[fastapi]>=1.40.0",
 ]
+
+scheduling = [
+    "apscheduler>=3.10.0",
+]
+
 all = [
-    "claude-agent-sdk[dev,docs]",
+    "yarnnn-agent-deployment[dev,monitoring,scheduling]",
 ]
 
 [project.urls]
-Homepage = "https://github.com/Kvkthecreator/claude-agentsdk-yarnn"
-Documentation = "https://github.com/Kvkthecreator/claude-agentsdk-yarnn/tree/main/docs"
-Repository = "https://github.com/Kvkthecreator/claude-agentsdk-yarnn"
-"Bug Tracker" = "https://github.com/Kvkthecreator/claude-agentsdk-yarnn/issues"
-
-[tool.setuptools]
-packages = [
-    "claude_agent_sdk",
-    "claude_agent_sdk.archetypes",
-    "claude_agent_sdk.integrations",
-    "claude_agent_sdk.integrations.memory",
-    "claude_agent_sdk.integrations.yarnnn",
-]
+Homepage = "https://github.com/Kvkthecreator/yarnnn-claude-agents"
+Repository = "https://github.com/Kvkthecreator/yarnnn-claude-agents"
+"Bug Tracker" = "https://github.com/Kvkthecreator/yarnnn-claude-agents/issues"
 
 [tool.black]
 line-length = 100
@@ -77,27 +76,11 @@ select = [
     "F",  # pyflakes
     "I",  # isort
     "B",  # flake8-bugbear
-    "C4", # flake8-comprehensions
-]
+    "C4", # flake8-comprehensions]
 ignore = [
     "E501",  # line too long (handled by black)
     "B008",  # do not perform function calls in argument defaults
 ]
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = false
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-follow_imports = "normal"
-strict_optional = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

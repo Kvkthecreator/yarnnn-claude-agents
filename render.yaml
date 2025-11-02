@@ -1,0 +1,70 @@
+# Render.com deployment configuration
+# https://render.com/docs/infrastructure-as-code
+
+services:
+  # Main web service for agent API endpoints
+  - type: web
+    name: yarnnn-agent-service
+    env: python
+    region: oregon  # Change to your preferred region
+    plan: starter  # starter, standard, pro
+    buildCommand: "pip install ."
+    startCommand: "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
+
+    envVars:
+      # Python version
+      - key: PYTHON_VERSION
+        value: 3.11
+
+      # Environment
+      - key: ENVIRONMENT
+        value: production
+
+      # Anthropic API (add via Render dashboard or secret file)
+      - key: ANTHROPIC_API_KEY
+        sync: false  # Add manually via dashboard for security
+
+      # Yarnnn Service (add via Render dashboard or secret file)
+      - key: YARNNN_API_URL
+        sync: false
+
+      - key: YARNNN_API_KEY
+        sync: false
+
+      - key: YARNNN_WORKSPACE_ID
+        sync: false
+
+      # Agent Baskets
+      - key: RESEARCH_BASKET_ID
+        sync: false
+
+      # Logging
+      - key: LOG_LEVEL
+        value: INFO
+
+      # Feature Flags
+      - key: ENABLE_RESEARCH_AGENT
+        value: true
+
+      - key: ENABLE_CONTENT_AGENT
+        value: false
+
+      - key: ENABLE_REPORTING_AGENT
+        value: false
+
+  # Optional: Cron job for scheduled research monitoring
+  # Uncomment when ready to add scheduled tasks
+  # - type: cron
+  #   name: research-monitor-daily
+  #   env: python
+  #   schedule: "0 6 * * *"  # Daily at 6am UTC
+  #   buildCommand: "pip install ."
+  #   startCommand: "python -c 'import asyncio; from api.dependencies import create_research_agent; agent = create_research_agent(); asyncio.run(agent.monitor())'"
+  #
+  #   envVars:
+  #     - fromService:
+  #         type: web
+  #         name: yarnnn-agent-service
+  #         envVarKey: ANTHROPIC_API_KEY
+  #     # Add other env vars similar to web service

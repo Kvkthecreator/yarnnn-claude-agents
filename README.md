@@ -1,715 +1,361 @@
-# Claude Agent SDK
+# Yarnnn Agent Deployment Service
 
-**Generic framework for building autonomous AI agents with pluggable integrations**
+**Production deployment service for Yarnnn autonomous agents**
 
-> 🔌 **Truly Generic**: Use in-memory storage, YARNNN, Notion, or build your own providers.
-> No vendor lock-in. Works standalone or with any backend.
-
-Build agents that can work for extended periods (days, weeks) with long-term memory, governance workflows, and seamless integration with external services. This SDK provides a clean, extensible architecture for creating production-ready autonomous agents.
-
-## Why Claude Agent SDK?
-
-Traditional agents struggle with:
-- **No long-term memory**: Context lost across sessions
-- **No governance**: Can't trust agents for autonomous operation
-- **Vendor lock-in**: Tied to specific memory/storage providers
-- **Poor extensibility**: Hard to add new integrations
-
-Claude Agent SDK solves this by providing:
-- **Generic architecture**: Build once, plug in any provider (YARNNN, Notion, GitHub, etc.)
-- **Agent identity**: Persistent agents with multiple sessions over time
-- **Session management**: Resume conversations, track work across sessions
-- **Provider interfaces**: MemoryProvider, GovernanceProvider, TaskProvider
-- **Production-ready**: Type safety, async/await, error handling, logging
+This repository contains the production deployment infrastructure for running autonomous agents that integrate with the Yarnnn platform. It provides HTTP endpoints that the Yarnnn main service calls to trigger agent tasks.
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────┐
-│         Your Custom Agent                       │
-│    (KnowledgeAgent, ContentAgent, etc.)        │
-└─────────────────────────────────────────────────┘
-                     ↓
-┌─────────────────────────────────────────────────┐
-│              BaseAgent (Generic)                │
-│  • Agent identity & sessions                    │
-│  • Claude integration                           │
-│  • Provider orchestration                       │
-└─────────────────────────────────────────────────┘
-                     ↓
-┌──────────────────────┬──────────────────────────┐
-│   MemoryProvider     │   GovernanceProvider     │
-│   (Abstract)         │   (Abstract)             │
-└──────────────────────┴──────────────────────────┘
-                     ↓
-┌──────────────────────────────────────────────────┐
-│          Pluggable Integrations                  │
-│                                                   │
-│  ┌──────────┐  ┌───────────┐  ┌─────────────┐  │
-│  │ YARNNN   │  │  Notion   │  │   GitHub    │  │
-│  │ (Memory  │  │ (Memory)  │  │   (Tasks)   │  │
-│  │  + Gov)  │  │           │  │             │  │
-│  └──────────┘  └───────────┘  └─────────────┘  │
-└──────────────────────────────────────────────────┘
+┌──────────────────────┐
+│  Yarnnn Main Service │
+│  (Platform/UI)       │
+└──────────────────────┘
+          │
+          │ HTTP API calls
+          v
+┌──────────────────────────────────┐
+│  This Repo: Agent Deployment API │
+│  - FastAPI web service           │
+│  - Agent endpoints               │
+│  - Configuration management      │
+└──────────────────────────────────┘
+          │
+          │ depends on
+          v
+┌──────────────────────────────────┐
+│  Claude Agent SDK (Open Source)  │
+│  - Agent framework               │
+│  - Archetypes                    │
+│  - Provider integrations         │
+│  github.com/Kvkthecreator/       │
+│    claude-agentsdk-opensource    │
+└──────────────────────────────────┘
 ```
 
-### Key Concepts
+## What's In This Repo
 
-**Agent** = Persistent conceptual entity (e.g., "Research Bot")
-**Session** = Each time the agent runs (tracks work, proposals, errors)
-**Provider** = Pluggable integration (memory, governance, tasks)
+- **`api/`** - FastAPI web service with agent endpoints
+- **`agents/`** - Agent configurations (YAML)
+- **`config/`** - Environment configurations
+- **`deployment/`** - Docker and Render deployment files
+- **`tests/`** - Integration tests
 
-```python
-# One agent, multiple sessions over time
-Workspace
-  └─ Agent: "Research Bot" (agent_id: research_bot_001)
-      ├─ Session 1: Monday research
-      ├─ Session 2: Tuesday research
-      └─ Session 3: Wednesday research
-```
+## What's NOT In This Repo
+
+- **Agent framework code** - Lives in [claude-agentsdk-opensource](https://github.com/Kvkthecreator/claude-agentsdk-opensource)
+- **Yarnnn platform code** - Separate private repository
+- **Library development** - Happens in open source repo
 
 ## Quick Start
 
-### Installation
+### Prerequisites
+
+- Python 3.10+
+- Docker (for local development)
+- Yarnnn account with API access
+- Anthropic API key
+
+### Local Development
+
+1. **Clone repository**
+   ```bash
+   git clone https://github.com/Kvkthecreator/yarnnn-claude-agents.git
+   cd yarnnn-claude-agents
+   ```
+
+2. **Set up environment**
+   ```bash
+   cp config/local.env.example config/local.env
+   # Edit config/local.env with your credentials
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Run locally**
+   ```bash
+   uvicorn api.main:app --reload
+   ```
+
+5. **Test endpoints**
+   ```bash
+   curl http://localhost:8000/health
+   curl http://localhost:8000/agents/research/status
+   ```
+
+### Docker Development
 
 ```bash
-pip install -r requirements.txt
+cd deployment/docker
+cp ../../config/local.env.example ../../config/local.env
+# Edit local.env with your credentials
+
+docker-compose up --build
 ```
 
-### 1. Minimal Agent (No Backend Required)
+Service will be available at `http://localhost:8000`
 
-Try the SDK immediately with in-memory storage - only needs Claude API key:
+## Deployment
 
-```python
-from claude_agent_sdk import BaseAgent
-from claude_agent_sdk.integrations.memory import InMemoryProvider
+### Render (Recommended)
 
+1. **Connect repository to Render**
+   - Create new Web Service
+   - Connect this GitHub repository
+   - Render will auto-detect `render.yaml`
 
-class SimpleAgent(BaseAgent):
-    async def execute(self, task: str, **kwargs):
-        # Start session
-        if not self.current_session:
-            self.current_session = self._start_session()
+2. **Configure environment variables**
+   Add via Render dashboard:
+   - `ANTHROPIC_API_KEY`
+   - `YARNNN_API_URL`
+   - `YARNNN_API_KEY`
+   - `YARNNN_WORKSPACE_ID`
+   - `RESEARCH_BASKET_ID`
 
-        # Query memory
-        contexts = await self.memory.query(task, limit=5)
-        context_str = "\n".join([c.content for c in contexts])
+3. **Deploy**
+   - Render will automatically deploy
+   - Health check: `https://your-service.onrender.com/health`
 
-        # Reason with Claude
-        response = await self.reason(task, context=context_str)
+### Manual Deployment
 
-        return response
+```bash
+# Build
+docker build -f deployment/docker/Dockerfile -t yarnnn-agents .
 
-
-# Create agent with in-memory provider
-memory = InMemoryProvider()
-memory.add("Python is a high-level programming language")
-memory.add("Rust focuses on safety and performance")
-
-agent = SimpleAgent(
-    agent_id="demo_agent",
-    memory=memory,
-    anthropic_api_key="sk-ant-..."
-)
-
-# Execute
-result = await agent.execute("Tell me about Python")
+# Run
+docker run -p 8000:8000 --env-file config/production.env yarnnn-agents
 ```
 
-**Try it now**: `python examples/00_minimal_agent.py`
+## API Endpoints
 
-### 2. With Persistent Memory (YARNNN)
+### Health & Status
 
-For production use with durable memory and governance:
+- **GET /**
+  Service information
 
-```python
-from claude_agent_sdk import BaseAgent
-from claude_agent_sdk.integrations.yarnnn import YarnnnMemory, YarnnnGovernance
+- **GET /health**
+  Health check (for monitoring)
 
+### Research Agent
 
-class MyAgent(BaseAgent):
-    async def execute(self, task: str, **kwargs):
-        # Same implementation as above
-        pass
+- **POST /agents/research/run**
+  Trigger research task
+  ```json
+  {
+    "task_type": "monitor",  // or "deep_dive"
+    "topic": "AI agents"     // required for deep_dive
+  }
+  ```
 
-
-# YARNNN providers for persistent storage
-memory = YarnnnMemory(
-    basket_id="basket_123",
-    api_key="ynk_...",
-    workspace_id="ws_123"
-)
-
-governance = YarnnnGovernance(
-    basket_id="basket_123",
-    api_key="ynk_...",
-    workspace_id="ws_123"
-)
-
-agent = MyAgent(
-    agent_id="production_agent",
-    memory=memory,
-    governance=governance,
-    anthropic_api_key="sk-ant-..."
-)
-
-result = await agent.execute("Research AI governance")
-```
-
-**Try it**: `python examples/01_with_yarnnn.py`
-
-### 3. Build Your Own Provider
-
-Create custom providers for your backend:
-
-```python
-from claude_agent_sdk.interfaces import MemoryProvider, Context
-
-
-class MyCustomProvider(MemoryProvider):
-    async def query(self, query: str, **kwargs) -> List[Context]:
-        # Connect to your database, API, or service
-        results = await my_backend.search(query)
-        return [Context(content=r.text, metadata=r.meta) for r in results]
-
-    async def store(self, context: Context) -> str:
-        return await my_backend.save(context)
-
-
-# Use your custom provider
-agent = MyAgent(
-    agent_id="custom_agent",
-    memory=MyCustomProvider(),
-    anthropic_api_key="sk-ant-..."
-)
-```
-
-**Learn more**: [Building Providers Guide](docs/BUILDING_PROVIDERS.md)
-
-## Agent Archetypes
-
-The SDK includes three production-ready agent archetypes with specialized subagents:
-
-### ResearchAgent
-Continuous monitoring and deep-dive research capabilities.
-
-```python
-from claude_agent_sdk.archetypes import ResearchAgent
-
-agent = ResearchAgent(
-    memory=memory_provider,
-    anthropic_api_key="sk-ant-...",
-    monitoring_domains=["competitors", "market_trends"],
-    monitoring_frequency="daily"
-)
-
-# Continuous monitoring
-await agent.monitor()
-
-# Deep dive research
-result = await agent.deep_dive("AI agent market landscape")
-```
-
-**Subagents**: web_monitor, competitor_tracker, social_listener, analyst
-
-### ContentCreatorAgent
-Multi-platform content creation with brand voice consistency.
-
-```python
-from claude_agent_sdk.archetypes import ContentCreatorAgent
-
-agent = ContentCreatorAgent(
-    memory=memory_provider,
-    anthropic_api_key="sk-ant-...",
-    enabled_platforms=["twitter", "linkedin", "blog"]
-)
-
-# Create platform-specific content
-result = await agent.create(
-    platform="twitter",
-    topic="AI agent trends",
-    content_type="thread"
-)
-
-# Repurpose content across platforms
-result = await agent.repurpose(
-    source_content="My latest blog post...",
-    target_platforms=["twitter", "linkedin"]
-)
-```
-
-**Subagents**: twitter_writer, linkedin_writer, blog_writer, instagram_creator, repurposer
-
-### ReportingAgent
-Professional document generation with template learning.
-
-```python
-from claude_agent_sdk.archetypes import ReportingAgent
-
-agent = ReportingAgent(
-    memory=memory_provider,
-    anthropic_api_key="sk-ant-...",
-    template_library={"excel": "path/to/template.xlsx"},
-    default_formats=["pdf", "xlsx"]
-)
-
-# Generate reports
-result = await agent.generate(
-    report_type="monthly_metrics",
-    format="xlsx",
-    data=metrics_data
-)
-```
-
-**Subagents**: excel_specialist, presentation_designer, report_writer, data_analyst
-
-**See**: `examples/02_research_agent.py` for complete archetype usage.
-
-## Features
-
-### 1. Agent Identity & Sessions
-
-Each agent has a persistent identity and creates sessions for each execution:
-
-```python
-# Create agent with identity
-agent = MyAgent(
-    agent_id="research_bot_001",  # Persistent
-    agent_name="Research Assistant",
-    memory=memory,
-    anthropic_api_key="sk-ant-..."
-)
-
-# Execute creates a session
-result = await agent.execute("Research AI governance")
-print(result["session_id"])  # e.g., "session_abc123"
-
-# Resume session later
-agent_resumed = MyAgent(
-    agent_id="research_bot_001",  # Same agent!
-    claude_session_id=result["claude_session_id"],
-    memory=memory,
-    anthropic_api_key="sk-ant-..."
-)
-
-await agent_resumed.execute(
-    "Continue the AI governance research",
-    resume_session=True
-)
-```
-
-### 2. Multiple Agents
-
-Run multiple agents simultaneously, each with their own identity:
-
-```python
-# Research agent
-research_agent = KnowledgeAgent(
-    agent_id="research_specialist",
-    memory=shared_memory,
-    anthropic_api_key="sk-ant-..."
-)
-
-# Content agent
-content_agent = ContentAgent(
-    agent_id="content_writer",
-    memory=shared_memory,  # Can share memory!
-    anthropic_api_key="sk-ant-..."
-)
-
-# Run independently or coordinated
-await research_agent.execute("Research AI trends")
-await content_agent.execute("Write blog about AI trends")
-```
-
-### 3. Pluggable Providers
-
-Swap providers without changing agent code:
-
-```python
-# YARNNN provider
-memory = YarnnnMemory(basket_id="basket_123")
-
-# Future: Notion provider
-# memory = NotionMemory(database_id="db_456")
-
-# Future: Vector store provider
-# memory = PineconeMemory(index_name="knowledge")
-
-# Agent works with any provider!
-agent = MyAgent(memory=memory, ...)
-```
-
-### 4. Optional Providers
-
-Not all agents need all providers:
-
-```python
-# Read-only agent (memory only, no governance)
-readonly_agent = MyAgent(
-    memory=memory,
-    governance=None,  # No governance
-    anthropic_api_key="sk-ant-..."
-)
-
-# Task-based agent (tasks only, no memory)
-task_agent = MyAgent(
-    tasks=task_provider,
-    memory=None,
-    governance=None,
-    anthropic_api_key="sk-ant-..."
-)
-```
-
-## Provider Interfaces
-
-The SDK defines three abstract provider interfaces:
-
-### MemoryProvider
-
-```python
-class MemoryProvider(ABC):
-    @abstractmethod
-    async def query(self, query: str, filters: dict, limit: int) -> List[Context]:
-        """Semantic search for context"""
-
-    @abstractmethod
-    async def get_all(self, filters: dict, limit: int) -> List[Context]:
-        """Get all items with optional filtering"""
-
-    async def summarize(self) -> Dict[str, Any]:
-        """Get summary statistics"""
-```
-
-### GovernanceProvider
-
-```python
-class GovernanceProvider(ABC):
-    @abstractmethod
-    async def propose(self, changes: List[Change], confidence: float, reasoning: str) -> Proposal:
-        """Create governance proposal"""
-
-    @abstractmethod
-    async def get_proposal_status(self, proposal_id: str) -> Proposal:
-        """Check proposal status"""
-
-    @abstractmethod
-    async def wait_for_approval(self, proposal_id: str, timeout: int) -> bool:
-        """Wait for human approval"""
-```
-
-### TaskProvider
-
-```python
-class TaskProvider(ABC):
-    @abstractmethod
-    async def get_pending_tasks(self, agent_id: str, limit: int) -> List[Task]:
-        """Get tasks for agent"""
-
-    @abstractmethod
-    async def update_task_status(self, task_id: str, status: str, result: Any) -> Task:
-        """Update task status"""
-
-    @abstractmethod
-    async def create_task(self, agent_id: str, description: str) -> Task:
-        """Create new task"""
-```
-
-## Available Providers
-
-### InMemory (Included)
-
-Simple in-memory storage - no external dependencies:
-
-```python
-from claude_agent_sdk.integrations.memory import InMemoryProvider
-
-memory = InMemoryProvider()
-memory.add("Your knowledge here")
-memory.add("More context", metadata={"topic": "AI"})
-
-# Query
-results = await memory.query("AI context")
-```
-
-**Perfect for**: Prototyping, demos, testing, learning the SDK
-
-### YARNNN (Included)
-
-Governed long-term memory with human approval workflows:
-
-```python
-from claude_agent_sdk.integrations.yarnnn import YarnnnMemory, YarnnnGovernance
-
-memory = YarnnnMemory(
-    basket_id="basket_123",
-    api_url="https://yarnnn.example.com",
-    api_key="ynk_...",
-    workspace_id="ws_123"
-)
-
-governance = YarnnnGovernance(
-    basket_id="basket_123",
-    api_url="https://yarnnn.example.com",
-    api_key="ynk_...",
-    workspace_id="ws_123"
-)
-```
-
-**Perfect for**: Production agents, durable memory, governed operations
-
-See [YARNNN Integration Guide](./docs/integrations/yarnnn.md) for details.
-
-### Build Your Own
-
-Create providers for any backend - see [Building Providers Guide](docs/BUILDING_PROVIDERS.md):
-
-- **Notion**: Database-based memory
-- **GitHub**: Repository-based tasks
-- **PostgreSQL**: Database with pgvector
-- **Pinecone/Weaviate**: Vector stores
-- **File System**: JSON file storage
-- **Any API**: Custom integration
-
-## Example Agents
-
-### Knowledge Agent
-
-Specialized for research and knowledge accumulation:
-
-```python
-from examples.knowledge_agent.agent_v2 import KnowledgeAgent
-
-agent = KnowledgeAgent(
-    agent_id="research_bot",
-    memory=YarnnnMemory(basket_id="research"),
-    governance=YarnnnGovernance(basket_id="research"),
-    anthropic_api_key="sk-ant-..."
-)
-
-result = await agent.execute("Research AI governance frameworks")
-```
-
-See `examples/knowledge-agent/` for full implementation.
+- **GET /agents/research/status**
+  Get agent status
 
 ### Content Agent (Coming Soon)
 
-Content creation with brand memory and approval workflows.
+- **POST /agents/content/run** - Not yet configured
+- **GET /agents/content/status** - Returns "not_configured"
 
-### Code Agent (Coming Soon)
+### Reporting Agent (Coming Soon)
 
-Code analysis and generation with codebase memory.
-
-## Project Structure
-
-```
-claude-agent-sdk/
-├── claude_agent_sdk/           # Core SDK (generic)
-│   ├── __init__.py
-│   ├── base.py                 # BaseAgent
-│   ├── interfaces.py           # Provider interfaces
-│   ├── session.py              # Session management
-│   └── integrations/           # Provider implementations
-│       ├── memory/             # In-memory provider
-│       │   ├── __init__.py
-│       │   └── simple.py       # InMemoryProvider
-│       └── yarnnn/             # YARNNN integration
-│           ├── client.py       # HTTP client
-│           ├── memory.py       # MemoryProvider impl
-│           ├── governance.py   # GovernanceProvider impl
-│           └── tools.py        # Claude tools
-├── examples/                    # Example agents
-│   ├── 00_minimal_agent.py     # No backend required
-│   ├── 01_with_yarnnn.py       # YARNNN integration examples
-│   └── knowledge-agent/        # Full knowledge agent
-├── docs/                        # Documentation
-│   ├── architecture.md
-│   ├── BUILDING_PROVIDERS.md   # Create custom providers
-│   ├── session-linking.md      # Work management integration
-│   └── QUICK_START.md
-└── README.md
-```
+- **POST /agents/reporting/run** - Not yet configured
+- **GET /agents/reporting/status** - Returns "not_configured"
 
 ## Configuration
 
 ### Environment Variables
 
+See `.env.example` for all available configuration options.
+
+**Required:**
+- `ANTHROPIC_API_KEY` - Claude API key
+- `YARNNN_API_URL` - Yarnnn service endpoint
+- `YARNNN_API_KEY` - Yarnnn API authentication
+- `YARNNN_WORKSPACE_ID` - Yarnnn workspace
+- `RESEARCH_BASKET_ID` - Basket for research agent data
+
+**Optional:**
+- `LOG_LEVEL` - Logging level (default: INFO)
+- `SENTRY_DSN` - Error tracking
+- `ENABLE_RESEARCH_AGENT` - Feature flag (default: true)
+
+### Agent Configuration
+
+Agents are configured via YAML files in `agents/{agent_type}/config.yaml`
+
+Example (`agents/research/config.yaml`):
+```yaml
+agent:
+  id: yarnnn_research_agent
+  type: research
+
+research:
+  monitoring_domains:
+    - "ai_agents"
+    - "market_trends"
+  monitoring_frequency: "daily"
+  signal_threshold: 0.7
+  synthesis_mode: "insights"
+```
+
+## Development Workflow
+
+### Adding New Agent Capabilities
+
+New agent features, archetypes, and tools are developed in the **open source repository**:
+
+1. **Develop in open source repo**
+   ```bash
+   cd ../claude-agentsdk-opensource
+   # Add new archetype, tool, or feature
+   git commit && git push
+   git tag v0.2.0 && git push --tags
+   ```
+
+2. **Update this deployment repo**
+   ```bash
+   cd ../yarnnn-claude-agents
+   # Update pyproject.toml to new version:
+   # "claude-agent-sdk @ git+...@v0.2.0"
+
+   pip install --upgrade --force-reinstall claude-agent-sdk
+   # Update configs if needed
+   git commit && git push
+   ```
+
+3. **Deploy**
+   - Render will auto-deploy on push
+   - Or manually: `docker-compose up --build`
+
+### Wire Up New Agent
+
+To add ContentCreatorAgent or ReportingAgent:
+
+1. **Update agent config** - Edit `agents/{agent_type}/config.yaml`
+2. **Implement factory function** - Update `api/dependencies.py`
+3. **Enable endpoint** - Update `api/routes/{agent_type}.py`
+4. **Set environment variables** - Add basket ID, enable flag
+5. **Test** - Call `/agents/{agent_type}/status`
+6. **Deploy**
+
+## Testing
+
+### Unit Tests
+
 ```bash
-# Anthropic (required)
-ANTHROPIC_API_KEY=sk-ant-...
-
-# YARNNN (if using YARNNN integration)
-YARNNN_API_URL=https://yarnnn.example.com
-YARNNN_API_KEY=ynk_...
-YARNNN_WORKSPACE_ID=ws_...
-YARNNN_BASKET_ID=basket_...  # Optional, can specify per agent
-
-# Agent Behavior
-AGENT_AUTO_APPROVE=false  # Auto-approve high-confidence proposals
-AGENT_CONFIDENCE_THRESHOLD=0.8  # Threshold for auto-approval
-
-# Logging
-LOG_LEVEL=INFO  # DEBUG, INFO, WARNING, ERROR
+pytest tests/
 ```
 
-## Creating Custom Agents
+### Integration Tests
 
-```python
-from claude_agent_sdk import BaseAgent
-from claude_agent_sdk.interfaces import MemoryProvider, GovernanceProvider
-
-class MyCustomAgent(BaseAgent):
-    """Custom agent with specialized behavior"""
-
-    def __init__(
-        self,
-        agent_id: str,
-        memory: MemoryProvider,
-        governance: GovernanceProvider,
-        anthropic_api_key: str,
-        # Add custom parameters
-        custom_setting: str = "default"
-    ):
-        super().__init__(
-            agent_id=agent_id,
-            agent_type="custom",
-            memory=memory,
-            governance=governance,
-            anthropic_api_key=anthropic_api_key
-        )
-
-        self.custom_setting = custom_setting
-
-    async def execute(self, task: str):
-        """Implement custom execution logic"""
-
-        # 1. Query memory if available
-        if self.memory:
-            contexts = await self.memory.query(task)
-            context_str = "\\n".join([c.content for c in contexts])
-        else:
-            context_str = ""
-
-        # 2. Reason with Claude
-        response = await self.reason(
-            task=task,
-            context=context_str,
-            system_prompt=self._get_custom_prompt()
-        )
-
-        # 3. Propose changes if needed
-        if self.governance:
-            # ... create proposal logic
-            pass
-
-        return response
-
-    def _get_custom_prompt(self) -> str:
-        """Custom system prompt"""
-        return f"""You are a specialized agent for {self.custom_setting}..."""
+```bash
+# Requires running service
+pytest tests/ -v --integration
 ```
 
-See [Creating Custom Agents](./docs/creating-agents.md) for detailed guide.
+### Manual Testing
 
-## Creating Custom Integrations
+```bash
+# Health check
+curl http://localhost:8000/health
 
-```python
-from claude_agent_sdk.interfaces import MemoryProvider, Context
+# Research agent status
+curl http://localhost:8000/agents/research/status
 
-class MyMemoryProvider(MemoryProvider):
-    """Custom memory provider implementation"""
-
-    async def query(self, query: str, filters: dict, limit: int) -> List[Context]:
-        # Your implementation
-        # Query your service (Notion, database, vector store, etc.)
-        results = await self.client.search(query)
-
-        # Convert to Context objects
-        return [
-            Context(
-                content=result.text,
-                metadata=result.metadata,
-                confidence=result.score
-            )
-            for result in results
-        ]
-
-    async def get_all(self, filters: dict, limit: int) -> List[Context]:
-        # Your implementation
-        pass
+# Trigger research monitoring (requires full configuration)
+curl -X POST http://localhost:8000/agents/research/run \
+  -H "Content-Type: application/json" \
+  -d '{"task_type": "monitor"}'
 ```
 
-See [Creating Integrations](./docs/creating-integrations.md) for detailed guide.
+## Project Structure
 
-## Roadmap
+```
+yarnnn-claude-agents/
+├── api/                        # FastAPI application
+│   ├── main.py                 # App entry point
+│   ├── dependencies.py         # Agent factories
+│   └── routes/                 # Endpoint handlers
+│       ├── research.py
+│       ├── content.py
+│       └── reporting.py
+├── agents/                     # Agent configs
+│   ├── research/
+│   │   └── config.yaml
+│   ├── content/
+│   │   └── config.yaml
+│   └── reporting/
+│       └── config.yaml
+├── config/                     # Environment configs
+│   ├── production.env.example
+│   └── local.env.example
+├── deployment/                 # Deployment files
+│   ├── docker/
+│   │   ├── Dockerfile
+│   │   └── docker-compose.yml
+│   └── render/
+├── tests/                      # Integration tests
+├── pyproject.toml              # Dependencies (incl. SDK)
+├── requirements.txt            # Pip requirements
+├── render.yaml                 # Render config
+└── README.md                   # This file
+```
 
-### Phase 1: Foundation ✅
-- [x] Generic BaseAgent architecture
-- [x] Provider interfaces (Memory, Governance, Task)
-- [x] Agent identity and session tracking
-- [x] InMemoryProvider (no dependencies)
-- [x] YARNNN integration
-- [x] Knowledge Agent example
-- [x] Provider building guide
+## Troubleshooting
 
-### Phase 2: Additional Integrations (Weeks 3-4)
-- [ ] Notion memory provider
-- [ ] GitHub task provider
-- [ ] Vector store memory provider (Pinecone/Weaviate)
-- [ ] Slack governance provider
+### "Configuration error" when calling endpoints
 
-### Phase 3: Advanced Features (Weeks 5-6)
-- [ ] Agent-to-agent communication
-- [ ] Workflow orchestration
-- [ ] Performance monitoring
-- [ ] Cost tracking
+- Verify all required environment variables are set
+- Check `.env` file is loaded correctly
+- Verify Yarnnn service is accessible
 
-### Phase 4: Production Ready (Weeks 7-8)
-- [ ] Comprehensive testing
-- [ ] Deployment guides (local, cloud, serverless)
-- [ ] Production best practices
-- [ ] Security hardening
+### "Agent not ready" status
 
-### Phase 5: Community (Weeks 9-10)
-- [ ] Plugin marketplace
-- [ ] Community integrations
-- [ ] Example agent gallery
-- [ ] Video tutorials
+- Check Yarnnn API credentials
+- Verify basket IDs exist in Yarnnn
+- Check logs: `docker-compose logs -f`
 
-## Contributing
+### Installation fails
 
-We welcome contributions! Areas of interest:
+- Ensure Git is installed (needed for GitHub dependency)
+- Check network access to GitHub
+- Try: `pip install --upgrade --force-reinstall claude-agent-sdk`
 
-- **New integrations**: Notion, GitHub, Airtable, etc.
-- **New agent types**: Code agents, content agents, monitoring agents
-- **Documentation**: Tutorials, guides, examples
-- **Testing**: Test coverage, integration tests
-- **Performance**: Optimization, caching, streaming
+## Documentation
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+- **Architecture Decision**: [ARCHITECTURE_DECISION.md](ARCHITECTURE_DECISION.md)
+- **Development Workflow**: [DEVELOPMENT_WORKFLOW.md](DEVELOPMENT_WORKFLOW.md)
+- **Yarnnn Integration**: [YARNNN_INTEGRATION.md](YARNNN_INTEGRATION.md)
+- **Refactoring Plan**: [REFACTORING_PLAN.md](REFACTORING_PLAN.md)
+- **Library README**: [README_LIBRARY.md](README_LIBRARY.md) (original agent SDK docs)
 
-## Philosophy
+## Related Repositories
 
-**Generic, Not Opinionated**: This SDK provides the structure, you bring the specifics. Whether you use YARNNN, Notion, or a custom backend, the agent code stays the same.
+- **Agent SDK (Open Source)**: [claude-agentsdk-opensource](https://github.com/Kvkthecreator/claude-agentsdk-opensource)
+- **Yarnnn Main Service**: Private repository
 
-**Agents are Workers, Not Tools**: Agents have persistent identity, learn over time, and build organizational knowledge. They're team members, not one-off scripts.
+## Support
 
-**Governance Enables Autonomy**: Human oversight through approval workflows enables true autonomous operation. Agents can work for days/weeks without constant supervision.
+For issues with:
+- **Agent framework/features**: Open issue in [claude-agentsdk-opensource](https://github.com/Kvkthecreator/claude-agentsdk-opensource/issues)
+- **Deployment/infrastructure**: Open issue in this repository
+- **Yarnnn platform**: Contact Yarnnn support
 
-**Extensibility First**: Clean interfaces, dependency injection, and pluggable providers make it easy to add new capabilities without changing core code.
+## Next Steps (Post-Restructuring)
+
+1. ✅ **Tag open source repo** - See [OPEN_SOURCE_TAGGING.md](OPEN_SOURCE_TAGGING.md)
+2. ⏳ **Configure Yarnnn connection** - Add credentials to environment
+3. ⏳ **Wire up ResearchAgent** - Test end-to-end with Yarnnn
+4. ⏳ **Deploy to Render** - Production deployment
+5. ⏳ **Add monitoring** - Sentry, metrics
+6. ⏳ **Wire up other agents** - Content, Reporting (one by one)
 
 ## License
 
 MIT License - see [LICENSE](LICENSE) file
 
-## Learn More
-
-- **Documentation**: [docs/](./docs/)
-- **Examples**: [examples/](./examples/)
-- **YARNNN Core**: [github.com/Kvkthecreator/rightnow-agent-app-fullstack](https://github.com/Kvkthecreator/rightnow-agent-app-fullstack)
-- **Claude Agent SDK**: [docs.anthropic.com](https://docs.anthropic.com)
-
 ---
 
-**Built with Claude Agent SDK + Pluggable Integrations**
-*Generic framework for autonomous agents*
+**Built with Claude Agent SDK + Yarnnn Integration**

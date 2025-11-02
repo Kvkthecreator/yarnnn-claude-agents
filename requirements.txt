@@ -1,17 +1,21 @@
-# Core Dependencies (matches pyproject.toml)
-anthropic>=0.18.0
-httpx>=0.25.0
+# Yarnnn Agent Deployment Service Dependencies
+# Generated from pyproject.toml
+
+# Core library (from open source)
+claude-agent-sdk @ git+https://github.com/Kvkthecreator/claude-agentsdk-opensource.git@v0.1.0
+
+# Web service
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
+pydantic-settings>=2.1.0
+
+# Configuration
 python-dotenv>=1.0.0
+pyyaml>=6.0
+
+# HTTP client
+httpx>=0.25.0
+
+# Async support
 aiohttp>=3.9.0
-
-# Development Dependencies (optional - use pip install -e ".[dev]")
-pytest>=7.4.0
-pytest-asyncio>=0.21.0
-black>=23.0.0
-ruff>=0.1.0
-mypy>=1.7.0
-
-# Documentation (optional - use pip install -e ".[docs]")
-mkdocs>=1.5.0
-mkdocs-material>=9.4.0
