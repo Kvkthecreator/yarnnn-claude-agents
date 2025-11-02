@@ -2,7 +2,7 @@
 # Generated from pyproject.toml
 
 # Core library (from open source)
-claude-agent-sdk @ git+https://github.com/Kvkthecreator/claude-agentsdk-opensource.git@v0.1.0
+claude-agent-sdk @ git+https://github.com/Kvkthecreator/claude-agentsdk-opensource.git@main
 
 # Web service
 fastapi>=0.104.0
