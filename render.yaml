@@ -8,7 +8,7 @@ services:
     env: python
     region: oregon  # Change to your preferred region
     plan: starter  # starter, standard, pro
-    buildCommand: "pip install ."
+    buildCommand: "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
     startCommand: "uvicorn api.main:app --host 0.0.0.0 --port $PORT"
     healthCheckPath: /health
 
@@ -30,13 +30,6 @@ services:
         sync: false
 
       - key: YARNNN_API_KEY
-        sync: false
-
-      - key: YARNNN_WORKSPACE_ID
-        sync: false
-
-      # Agent Baskets
-      - key: RESEARCH_BASKET_ID
         sync: false
 
       # Logging

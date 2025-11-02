@@ -109,11 +109,11 @@ Service will be available at `http://localhost:8000`
 
 2. **Configure environment variables**
    Add via Render dashboard:
-   - `ANTHROPIC_API_KEY`
-   - `YARNNN_API_URL`
-   - `YARNNN_API_KEY`
-   - `YARNNN_WORKSPACE_ID`
-   - `RESEARCH_BASKET_ID`
+   - `ANTHROPIC_API_KEY` - Your Claude API key
+   - `YARNNN_API_URL` - Yarnnn service endpoint
+   - `YARNNN_API_KEY` - Service-level API key for Yarnnn
+
+   **Note:** `workspace_id` and `basket_id` are now passed per-request (see API section below)
 
 3. **Deploy**
    - Render will automatically deploy
@@ -145,8 +145,10 @@ docker run -p 8000:8000 --env-file config/production.env yarnnn-agents
   Trigger research task
   ```json
   {
-    "task_type": "monitor",  // or "deep_dive"
-    "topic": "AI agents"     // required for deep_dive
+    "task_type": "monitor",         // or "deep_dive"
+    "workspace_id": "ws_abc123",    // Yarnnn workspace ID
+    "basket_id": "basket_xyz789",   // Basket to store results
+    "topic": "AI agents"            // required for deep_dive only
   }
   ```
 
@@ -172,9 +174,13 @@ See `.env.example` for all available configuration options.
 **Required:**
 - `ANTHROPIC_API_KEY` - Claude API key
 - `YARNNN_API_URL` - Yarnnn service endpoint
-- `YARNNN_API_KEY` - Yarnnn API authentication
-- `YARNNN_WORKSPACE_ID` - Yarnnn workspace
-- `RESEARCH_BASKET_ID` - Basket for research agent data
+- `YARNNN_API_KEY` - Service-level API authentication key
+
+**Per-Request Parameters (not environment variables):**
+- `workspace_id` - Passed in each API request body
+- `basket_id` - Passed in each API request body
+
+This design allows the service to handle multiple users/workspaces without reconfiguration.
 
 **Optional:**
 - `LOG_LEVEL` - Logging level (default: INFO)
@@ -264,10 +270,14 @@ curl http://localhost:8000/health
 # Research agent status
 curl http://localhost:8000/agents/research/status
 
-# Trigger research monitoring (requires full configuration)
+# Trigger research monitoring
 curl -X POST http://localhost:8000/agents/research/run \
   -H "Content-Type: application/json" \
-  -d '{"task_type": "monitor"}'
+  -d '{
+    "task_type": "monitor",
+    "workspace_id": "ws_your_workspace_id",
+    "basket_id": "basket_your_basket_id"
+  }'
 ```
 
 ## Project Structure

@@ -29,24 +29,24 @@ def load_agent_config(agent_type: str) -> dict:
         return yaml.safe_load(f)
 
 
-def get_yarnnn_providers(basket_id: str):
+def get_yarnnn_providers(workspace_id: str, basket_id: str):
     """Create Yarnnn memory and governance providers.
 
     Args:
-        basket_id: Yarnnn basket ID for this agent
+        workspace_id: Yarnnn workspace ID (passed from request)
+        basket_id: Yarnnn basket ID for this agent (passed from request)
 
     Returns:
         Tuple of (YarnnnMemory, YarnnnGovernance)
     """
     # Get credentials from environment
     api_key = os.getenv("YARNNN_API_KEY")
-    workspace_id = os.getenv("YARNNN_WORKSPACE_ID")
     api_url = os.getenv("YARNNN_API_URL")
 
-    if not all([api_key, workspace_id, api_url]):
+    if not all([api_key, api_url]):
         raise ValueError(
             "Missing required environment variables: "
-            "YARNNN_API_KEY, YARNNN_WORKSPACE_ID, YARNNN_API_URL"
+            "YARNNN_API_KEY, YARNNN_API_URL"
         )
 
     memory = YarnnnMemory(
@@ -66,20 +66,20 @@ def get_yarnnn_providers(basket_id: str):
     return memory, governance
 
 
-def create_research_agent() -> ResearchAgent:
+def create_research_agent(workspace_id: str, basket_id: str) -> ResearchAgent:
     """Create configured research agent instance.
+
+    Args:
+        workspace_id: Yarnnn workspace ID (from request)
+        basket_id: Yarnnn basket ID for research results (from request)
 
     Returns:
         Configured ResearchAgent
     """
     config = load_agent_config("research")
 
-    # Get Yarnnn providers
-    basket_id = os.getenv("RESEARCH_BASKET_ID")
-    if not basket_id:
-        raise ValueError("RESEARCH_BASKET_ID environment variable required")
-
-    memory, governance = get_yarnnn_providers(basket_id)
+    # Get Yarnnn providers with dynamic workspace and basket
+    memory, governance = get_yarnnn_providers(workspace_id, basket_id)
 
     # Get Anthropic API key
     anthropic_api_key = os.getenv("ANTHROPIC_API_KEY")

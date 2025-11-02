@@ -16,6 +16,8 @@ class ResearchTaskRequest(BaseModel):
     """Request model for research tasks."""
     task_type: str = Field(..., description="Type of research task (monitor, deep_dive)")
     topic: Optional[str] = Field(None, description="Topic for deep dive research")
+    workspace_id: str = Field(..., description="Yarnnn workspace ID for this request")
+    basket_id: str = Field(..., description="Yarnnn basket ID to store research results")
     parameters: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional parameters")
 
 
@@ -43,11 +45,14 @@ async def run_research_task(request: ResearchTaskRequest):
     Returns:
         Task execution result
     """
-    logger.info(f"Received research task: {request.task_type}")
+    logger.info(f"Received research task: {request.task_type} for workspace: {request.workspace_id}")
 
     try:
-        # Create agent instance
-        agent = create_research_agent()
+        # Create agent instance with dynamic workspace and basket
+        agent = create_research_agent(
+            workspace_id=request.workspace_id,
+            basket_id=request.basket_id
+        )
 
         # Execute based on task type
         if request.task_type == "monitor":
@@ -99,20 +104,22 @@ async def get_research_agent_status():
     Returns:
         Agent status information
     """
-    try:
-        # Verify agent can be created
-        agent = create_research_agent()
+    import os
 
+    # Check if required environment variables are set
+    required_vars = ["ANTHROPIC_API_KEY", "YARNNN_API_KEY", "YARNNN_API_URL"]
+    missing_vars = [var for var in required_vars if not os.getenv(var)]
+
+    if missing_vars:
         return {
-            "status": "ready",
-            "agent_id": agent.agent_id,
-            "agent_type": agent.agent_type,
-            "message": "Research agent is configured and ready"
+            "status": "not_configured",
+            "message": f"Missing environment variables: {', '.join(missing_vars)}",
+            "note": "workspace_id and basket_id are now passed per-request"
         }
 
-    except Exception as e:
-        logger.error(f"Error checking agent status: {e}")
-        return {
-            "status": "error",
-            "message": str(e)
-        }
+    return {
+        "status": "ready",
+        "agent_type": "research",
+        "message": "Research agent endpoint is ready. Pass workspace_id and basket_id in requests.",
+        "required_request_params": ["task_type", "workspace_id", "basket_id"]
+    }
